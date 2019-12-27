@@ -7,7 +7,6 @@ endif
 call plug#begin('~/.local/share/nvim/plugged')
 
 Plug 'sheerun/vim-polyglot'
-Plug 'kien/ctrlp.vim'
 Plug 'mattn/emmet-vim'
 Plug 'scrooloose/nerdcommenter'
 Plug 'editorconfig/editorconfig-vim'
@@ -18,6 +17,12 @@ Plug 'joshdick/onedark.vim'
 Plug 'bkad/CamelCaseMotion'
 Plug 'w0rp/ale'
 Plug 'nathanaelkane/vim-indent-guides'
+Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug 'junegunn/fzf.vim'
+Plug 'autozimu/LanguageClient-neovim', {
+    \ 'branch': 'next',
+    \ 'do': 'bash install.sh',
+    \ }
 
 call plug#end()
 
@@ -36,6 +41,14 @@ if (empty($TMUX))
     set termguicolors
   endif
 endif
+
+" No arrow keys --- force yourself to use the home row
+nnoremap <up> <nop>
+nnoremap <down> <nop>
+inoremap <up> <nop>
+inoremap <down> <nop>
+inoremap <left> <nop>
+inoremap <right> <nop>
 
 " disable guicursor
 " some wierd character show on command mode
@@ -93,14 +106,9 @@ set foldlevel=2                             " Start folding automatically from l
 set fillchars="fold: "                      " Characters to fill the statuslines and vertical separators
 
 set completeopt-=preview                    " Don't show preview scratch buffers
-set wildignore=*.o,*.obj,*~
-set wildignore+=*vim/backups*
-set wildignore+=*sass-cache*
-set wildignore+=*node_modules*
-set wildignore+=*DS_Store*
-set wildignore+=*.gem
-set wildignore+=tmp/**
-set wildignore+=*vendor*
+set wildignore=*.o,*.obj,*~,*vim/backups*,*sass-cache*,*node_modules*,*DS_Store*,*.gem,tmp/**,*vendor*
+
+set undodir=~/.undodir
 
 if has('nvim')
   let g:loaded_python_provider=1                        " Disable python 2 interface
@@ -206,6 +214,7 @@ xnoremap . :norm.<CR>
 " Quick save and close buffer
 nnoremap <leader>w :w<CR>
 nnoremap <leader>d :bd<CR>
+nnoremap <leader>r :b#<CR>
 nnoremap <silent> <leader>c :qa!<CR>
 nnoremap <silent> <leader>q :q<CR>
 
@@ -235,18 +244,70 @@ let g:indent_guides_start_level = 2
 let g:indent_guides_guide_size = 1
 let g:indent_guides_enable_on_vim_startup = 1
 
-" CtrlP vim auto scan
-" CtrlP auto cache clearing.
-" ----------------------------------------------------------------------------
-function! SetupCtrlP()
-  if exists("g:loaded_ctrlp") && g:loaded_ctrlp
-    augroup CtrlPExtension
-      autocmd!
-      autocmd FocusGained  * CtrlPClearCache
-      autocmd BufWritePost * CtrlPClearCache
-    augroup END
-  endif
-endfunction
-if has("autocmd")
-  autocmd VimEnter * :call SetupCtrlP()
-endif
+" fzf
+noremap <C-p> :Files<CR>
+" Mapping selecting mappings
+nmap <leader><tab> <plug>(fzf-maps-n)
+"xmap <leader><tab> <plug>(fzf-maps-x)
+"omap <leader><tab> <plug>(fzf-maps-o)
+
+" Insert mode completion
+imap <c-x><c-k> <plug>(fzf-complete-word)
+imap <c-x><c-f> <plug>(fzf-complete-path)
+imap <c-x><c-j> <plug>(fzf-complete-file-ag)
+imap <c-x><c-l> <plug>(fzf-complete-line)
+
+" Advanced customization using autoload functions
+inoremap <expr> <c-x><c-k> fzf#vim#complete#word({'left': '15%'})
+" This is the default extra key bindings
+let g:fzf_action = {
+  \ 'ctrl-t': 'tab split',
+  \ 'ctrl-x': 'split',
+  \ 'ctrl-v': 'vsplit' }
+
+" Default fzf layout
+" - down / up / left / right
+let g:fzf_layout = { 'down': '~25%' }
+command! -bang -nargs=* Rg
+  \ call fzf#vim#grep(
+  \   'rg --column --line-number --no-heading --color=always '.shellescape(<q-args>), 1,
+  \   <bang>0 ? fzf#vim#with_preview('up:60%')
+  \           : fzf#vim#with_preview('right:50%:hidden', '?'),
+  \   <bang>0)
+
+" In Neovim, you can set up fzf window using a Vim command
+"let g:fzf_layout = { 'window': 'enew' }
+"let g:fzf_layout = { 'window': '-tabnew' }
+"let g:fzf_layout = { 'window': '10new' }
+
+" Customize fzf colors to match your color scheme
+let g:fzf_colors =
+\ { 'fg':      ['fg', 'Normal'],
+  \ 'bg':      ['bg', 'Normal'],
+  \ 'hl':      ['fg', 'Comment'],
+  \ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
+  \ 'bg+':     ['bg', 'CursorLine', 'CursorColumn'],
+  \ 'hl+':     ['fg', 'Statement'],
+  \ 'info':    ['fg', 'PreProc'],
+  \ 'border':  ['fg', 'Ignore'],
+  \ 'prompt':  ['fg', 'Conditional'],
+  \ 'pointer': ['fg', 'Exception'],
+  \ 'marker':  ['fg', 'Keyword'],
+  \ 'spinner': ['fg', 'Label'],
+  \ 'header':  ['fg', 'Comment'] }
+
+" language server
+" Required for operations modifying multiple buffers like rename.
+set hidden
+
+let g:LanguageClient_serverCommands = {
+    \ 'rust': ['~/.cargo/bin/rustup', 'run', 'stable', 'rls'],
+    \ 'javascript': ['tcp://127.0.0.1:2089'],
+    \ 'javascript.jsx': ['tcp://127.0.0.1:2089'],
+    \ 'php': ['tcp://127.0.0.1:2090'],
+    \ }
+
+nnoremap <silent> K :call LanguageClient#textDocument_hover()<CR>
+nnoremap <silent> gd :call LanguageClient#textDocument_definition()<CR>
+nnoremap <silent> <F2> :call LanguageClient#textDocument_rename()<CR>
+
